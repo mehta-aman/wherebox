@@ -40,12 +40,14 @@
 
 ## Upcoming Milestones
 
-### Milestone 2 — Authentication & Database (Next Up) ⏳
-- Configure Supabase client and server-side route handlers.
-- Create PostgreSQL migrations for `profiles`, `shipments`, `tracking_events`, and `notifications`.
-- Implement Row Level Security (RLS) policies isolating user data.
-- Add email/password authentication & Google OAuth sign-in.
-- Automated tests for user isolation and cross-account access denial.
+### Milestone 2 — Authentication & Database (In Progress) 🟡
+- [x] Installed `@supabase/supabase-js` and `@supabase/ssr`.
+- [x] Created PostgreSQL migration `20261020000000_initial_schema.sql` covering `profiles`, `shipments`, `tracking_events`, and `notifications`.
+- [x] Successfully deployed database schema and verified table provisioning in Supabase.
+- [x] Verified Row Level Security (RLS) enforcement: unauthenticated writes are rejected (`42501`) and data read isolation is strictly preserved.
+- [x] Configured browser and server-side Supabase SSR client helpers with defensive URL sanitization.
+- [ ] Implement user authentication UI (Sign In / Sign Up / Forgot Password).
+- [ ] Connect authenticated dashboard queries to live Supabase backend.
 
 ### Milestone 3 — Live Manual Tracking ⏳
 - Evaluate and select free-tier tracking provider (17TRACK / Ship24).
