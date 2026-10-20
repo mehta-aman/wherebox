@@ -1,0 +1,25 @@
+{
+  "name": "WhereBox — Universal Package Tracker",
+  "short_name": "WhereBox",
+  "description": "Every package. One place. Premium universal package tracking and delivery management.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#6366F1",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "productivity", "shopping"]
+}

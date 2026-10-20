@@ -1,0 +1,33 @@
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="192" height="192" rx="42" fill="#080F25" />
+  <rect width="192" height="192" rx="42" fill="url(#pwa-bg-grad-192)" fill-opacity="0.8" />
+  <rect x="1" y="1" width="190" height="190" rx="41" stroke="white" stroke-opacity="0.15" stroke-width="2" />
+  
+  <defs>
+    <radialGradient id="pwa-bg-grad-192" cx="50%" cy="15%" r="85%">
+      <stop offset="0%" stop-color="#1E1B4B" />
+      <stop offset="70%" stop-color="#080F25" />
+      <stop offset="100%" stop-color="#030712" />
+    </radialGradient>
+    <linearGradient id="pwa-box-192" x1="45" y1="65" x2="145" y2="165" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#818CF8" />
+      <stop offset="100%" stop-color="#4F46E5" />
+    </linearGradient>
+    <linearGradient id="pwa-pin-192" x1="96" y1="15" x2="145" y2="105" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#14B8A6" />
+      <stop offset="50%" stop-color="#6366F1" />
+      <stop offset="100%" stop-color="#8B5CF6" />
+    </linearGradient>
+  </defs>
+
+  <!-- Parcel Isometric Box -->
+  <path d="M96 75L156 103V142L96 170L36 142V103L96 75Z" fill="url(#pwa-box-192)" />
+  <path d="M36 103L96 131V170L36 142V103Z" fill="#312E81" fill-opacity="0.5" />
+  <path d="M156 103L96 131V170L156 142V103Z" fill="#1E1B4B" fill-opacity="0.65" />
+  <path d="M96 75L156 103L96 131L36 103L96 75Z" fill="#A5B4FC" fill-opacity="0.8" />
+
+  <!-- Location Pin -->
+  <path d="M96 19C77 19 62 34 62 53C62 74 96 109 96 109C96 109 130 74 130 53C130 34 115 19 96 19Z" fill="url(#pwa-pin-192)" />
+  <circle cx="96" cy="53" r="14" fill="#FFFFFF" />
+  <circle cx="96" cy="53" r="7" fill="#14B8A6" />
+</svg>
