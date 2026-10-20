@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Search, Plus, Sparkles, Building2, Check, AlertCircle } from "lucide-react";
+import { Search, Plus, Sparkles, Building2, Package, Check, AlertCircle, SlidersHorizontal } from "lucide-react";
 import { Button } from "./Button";
-import { detectCarrierHeuristic, POPULAR_STORES } from "@/lib/carriers";
+import { detectCarrierHeuristic, POPULAR_STORES, SUPPORTED_CARRIERS } from "@/lib/carriers";
 import { CarrierInfo } from "@/types/shipment";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,7 @@ interface TrackingInputProps {
   onAddShipment: (payload: {
     trackingNumber: string;
     storeName?: string;
+    itemLabel?: string;
     carrier?: CarrierInfo;
   }) => Promise<{ success: boolean; message?: string }>;
   existingTrackingNumbers?: string[];
@@ -18,9 +19,12 @@ interface TrackingInputProps {
 
 export function TrackingInput({ onAddShipment, existingTrackingNumbers = [] }: TrackingInputProps) {
   const [trackingNumber, setTrackingNumber] = useState("");
+  const [itemLabel, setItemLabel] = useState("");
   const [storeName, setStoreName] = useState("");
+  const [selectedCarrierCode, setSelectedCarrierCode] = useState<string>("");
   const [detectedCarrier, setDetectedCarrier] = useState<CarrierInfo | null>(null);
   const [isStoreOpen, setIsStoreOpen] = useState(false);
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -28,10 +32,17 @@ export function TrackingInput({ onAddShipment, existingTrackingNumbers = [] }: T
     if (trackingNumber.trim().length >= 4) {
       const carrier = detectCarrierHeuristic(trackingNumber);
       setDetectedCarrier(carrier);
+      if (carrier && !selectedCarrierCode) {
+        setSelectedCarrierCode(carrier.code);
+      }
     } else {
       setDetectedCarrier(null);
     }
-  }, [trackingNumber]);
+  }, [trackingNumber, selectedCarrierCode]);
+
+  const activeCarrier = selectedCarrierCode
+    ? SUPPORTED_CARRIERS.find((c) => c.code === selectedCarrierCode) || detectedCarrier
+    : detectedCarrier;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,15 +64,19 @@ export function TrackingInput({ onAddShipment, existingTrackingNumbers = [] }: T
     try {
       const res = await onAddShipment({
         trackingNumber: cleanNumber,
-        storeName: storeName || undefined,
-        carrier: detectedCarrier || undefined,
+        storeName: storeName.trim() || undefined,
+        itemLabel: itemLabel.trim() || undefined,
+        carrier: activeCarrier || undefined,
       });
 
       if (res.success) {
         setFeedback({ type: "success", text: res.message || `Package #${cleanNumber} added successfully!` });
         setTrackingNumber("");
+        setItemLabel("");
         setStoreName("");
+        setSelectedCarrierCode("");
         setDetectedCarrier(null);
+        setShowMoreOptions(false);
       } else {
         setFeedback({ type: "error", text: res.message || "Failed to add tracking number." });
       }
@@ -76,11 +91,11 @@ export function TrackingInput({ onAddShipment, existingTrackingNumbers = [] }: T
     <div className="w-full">
       <form
         onSubmit={handleSubmit}
-        className="p-3 sm:p-4 rounded-2xl bg-white/90 backdrop-blur-2xl border border-white/80 shadow-[0_10px_35px_-4px_rgba(99,102,241,0.12)] transition-all"
+        className="p-3.5 sm:p-5 rounded-2xl bg-white/90 backdrop-blur-2xl border border-white/80 shadow-[0_10px_35px_-4px_rgba(99,102,241,0.12)] transition-all"
       >
-        <div className="flex flex-col lg:flex-row gap-2.5 items-center">
-          {/* Tracking Number Input */}
-          <div className="relative flex-1 w-full">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-center">
+          {/* Tracking Number Input (col 12 or 5) */}
+          <div className="relative md:col-span-5 w-full">
             <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
               <Search className="w-4 h-4" />
             </div>
@@ -91,20 +106,34 @@ export function TrackingInput({ onAddShipment, existingTrackingNumbers = [] }: T
                 setTrackingNumber(e.target.value);
                 if (feedback) setFeedback(null);
               }}
-              placeholder="Enter tracking number (e.g. DEL1498..., 38910..., FMPC...)"
-              className="w-full h-12 pl-10 pr-28 rounded-xl bg-slate-50/80 border border-slate-200/90 text-sm font-medium text-slate-900 placeholder:text-slate-400 transition-all focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 focus:outline-none"
+              placeholder="Tracking # (Delhivery, Blue Dart, DTDC, India Post...)"
+              className="w-full h-12 pl-10 pr-28 rounded-xl bg-slate-50/80 border border-slate-200/90 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 transition-all focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 focus:outline-none"
             />
-            {/* Carrier Detection Badge */}
-            {detectedCarrier && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200/80 text-[11px] font-semibold animate-in fade-in zoom-in-95 duration-150">
-                <Sparkles className="w-3 h-3 text-indigo-500" />
-                <span>{detectedCarrier.name}</span>
+            {/* Auto-detected Carrier Badge */}
+            {activeCarrier && (
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200/80 text-[10px] sm:text-[11px] font-semibold animate-in fade-in zoom-in-95 duration-150">
+                <Sparkles className="w-3 h-3 text-indigo-500 shrink-0" />
+                <span className="truncate max-w-[90px]">{activeCarrier.name}</span>
               </div>
             )}
           </div>
 
-          {/* Optional Store Selector */}
-          <div className="relative w-full lg:w-56">
+          {/* Product / Item Name (col 12 or 3) */}
+          <div className="relative md:col-span-3 w-full">
+            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+              <Package className="w-4 h-4" />
+            </div>
+            <input
+              type="text"
+              value={itemLabel}
+              onChange={(e) => setItemLabel(e.target.value)}
+              placeholder="Item name (e.g. Headphones)"
+              className="w-full h-12 pl-10 pr-3 rounded-xl bg-slate-50/80 border border-slate-200/90 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 transition-all focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 focus:outline-none"
+            />
+          </div>
+
+          {/* Store Selector (col 12 or 2) */}
+          <div className="relative md:col-span-2 w-full">
             <div className="relative">
               <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
                 <Building2 className="w-4 h-4" />
@@ -114,8 +143,8 @@ export function TrackingInput({ onAddShipment, existingTrackingNumbers = [] }: T
                 value={storeName}
                 onChange={(e) => setStoreName(e.target.value)}
                 onFocus={() => setIsStoreOpen(true)}
-                placeholder="Store (e.g. Amazon)"
-                className="w-full h-12 pl-10 pr-4 rounded-xl bg-slate-50/80 border border-slate-200/90 text-sm text-slate-800 placeholder:text-slate-400 transition-all focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 focus:outline-none"
+                placeholder="Store (Amazon)"
+                className="w-full h-12 pl-10 pr-4 rounded-xl bg-slate-50/80 border border-slate-200/90 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 transition-all focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 focus:outline-none"
               />
             </div>
 
@@ -149,18 +178,54 @@ export function TrackingInput({ onAddShipment, existingTrackingNumbers = [] }: T
             )}
           </div>
 
-          {/* Submit Action */}
-          <Button
-            type="submit"
-            size="lg"
-            variant="primary"
-            isLoading={isLoading}
-            className="w-full lg:w-auto h-12 px-6 shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Track Package</span>
-          </Button>
+          {/* Submit Action (col 12 or 2) */}
+          <div className="md:col-span-2 w-full flex items-center gap-2">
+            <Button
+              type="submit"
+              size="lg"
+              variant="primary"
+              isLoading={isLoading}
+              className="w-full h-12 px-4 shrink-0 font-bold"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Track</span>
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => setShowMoreOptions(!showMoreOptions)}
+              className={cn(
+                "p-3 h-12 rounded-xl border border-slate-200/80 text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors shrink-0",
+                showMoreOptions && "bg-indigo-50 text-indigo-600 border-indigo-200"
+              )}
+              title="Courier Selection & Options"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+            </button>
+          </div>
         </div>
+
+        {/* Expandable Manual Courier Override */}
+        {showMoreOptions && (
+          <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-3 animate-in fade-in slide-in-from-top-1 duration-150">
+            <span className="text-xs font-semibold text-slate-600">Carrier Override:</span>
+            <select
+              value={selectedCarrierCode}
+              onChange={(e) => setSelectedCarrierCode(e.target.value)}
+              className="h-9 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="">Auto-Detect Courier</option>
+              {SUPPORTED_CARRIERS.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name} ({c.region})
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] text-slate-400">
+              Select if the tracking format matches multiple courier formats.
+            </span>
+          </div>
+        )}
 
         {/* Real-time Validation Feedback */}
         {feedback && (

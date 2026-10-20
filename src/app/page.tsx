@@ -163,6 +163,7 @@ function DashboardContent() {
   const handleAddShipment = async (payload: {
     trackingNumber: string;
     storeName?: string;
+    itemLabel?: string;
     carrier?: CarrierInfo;
   }): Promise<{ success: boolean; message?: string }> => {
     const carrierName = payload.carrier?.name || "India Post / Multi-Carrier";
@@ -177,69 +178,37 @@ function DashboardContent() {
       };
     }
 
-    if (supabase && currentUser && !isDemo) {
+    if (currentUser && !isDemo) {
       try {
-        // 1. Insert shipment into Supabase
-        const { data: dbShipment, error: shipError } = await supabase
-          .from("shipments")
-          .insert({
-            user_id: currentUser.id,
-            tracking_number: payload.trackingNumber,
-            carrier_code: carrierCode,
-            carrier_name: carrierName,
-            source_type: "manual",
-            store_name: payload.storeName || "Online Store",
-            order_reference: `WB-${Math.floor(100000 + Math.random() * 900000)}`,
-            item_label: "Standard Package Shipment",
-            normalized_status: "IN_TRANSIT",
-            raw_status: `Shipment registered with ${carrierName}`,
-            estimated_delivery_at: new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
-            shipped_at: nowIso,
-            last_event_at: nowIso,
-            last_checked_at: nowIso,
-            provider_name: "manual",
-          })
-          .select()
-          .single();
+        const res = await fetch("/api/tracking", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            trackingNumber: payload.trackingNumber,
+            storeName: payload.storeName,
+            itemLabel: payload.itemLabel,
+            carrierCode: payload.carrier?.code,
+          }),
+        });
 
-        if (shipError || !dbShipment) {
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          await loadData();
+          return {
+            success: true,
+            message: data.message || `Package #${payload.trackingNumber} added and tracking initialized!`,
+          };
+        } else {
           return {
             success: false,
-            message: shipError?.message || "Failed to save shipment to database.",
+            message: data.error || "Failed to add package.",
           };
         }
-
-        // 2. Insert initial tracking event
-        await supabase.from("tracking_events").insert({
-          shipment_id: dbShipment.id,
-          normalized_status: "IN_TRANSIT",
-          description: `Shipment registered and in transit with ${carrierName}`,
-          location: "Central Logistics Hub",
-          timestamp: nowIso,
-        });
-
-        // 3. Insert notification
-        await supabase.from("notifications").insert({
-          user_id: currentUser.id,
-          shipment_id: dbShipment.id,
-          tracking_number: payload.trackingNumber,
-          store_name: payload.storeName || "Online Store",
-          title: "Package Added",
-          message: `Tracking initiated for #${payload.trackingNumber} via ${carrierName}`,
-          status: "IN_TRANSIT",
-        });
-
-        // Refresh live data
-        await loadData();
-
-        return {
-          success: true,
-          message: `Package #${payload.trackingNumber} saved to your vault!`,
-        };
       } catch {
         return {
           success: false,
-          message: "Database connection failed. Please try again.",
+          message: "Failed to connect to tracking service. Please try again.",
         };
       }
     } else {
@@ -253,7 +222,7 @@ function DashboardContent() {
         sourceType: "manual",
         storeName: payload.storeName || "Online Store",
         orderReference: `WB-${Math.floor(100000 + Math.random() * 900000)}`,
-        itemLabel: "Standard Package Shipment",
+        itemLabel: payload.itemLabel || "Standard Package Shipment",
         normalizedStatus: "IN_TRANSIT",
         rawStatus: `Shipment registered with ${carrierName}`,
         estimatedDeliveryAt: new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
@@ -328,12 +297,17 @@ function DashboardContent() {
 
   // Refresh shipment
   const handleRefresh = async (shipmentId: string) => {
-    if (supabase && currentUser && !isDemo) {
-      await supabase
-        .from("shipments")
-        .update({ last_checked_at: new Date().toISOString() })
-        .eq("id", shipmentId);
-      await loadData();
+    if (currentUser && !isDemo) {
+      try {
+        await fetch("/api/tracking/refresh", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ shipmentId }),
+        });
+        await loadData();
+      } catch {
+        // Fallback
+      }
     } else {
       await new Promise((r) => setTimeout(r, 600));
       setShipments((prev) =>
