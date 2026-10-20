@@ -55,13 +55,16 @@
 - [x] Wired live Supabase database queries into the dashboard for adding shipments, retrieving user packages, updating archive status, deleting records, and notifications.
 - [x] Preserved optional `?demo=true` preview mode for unauthenticated visual testing.
 
-### Milestone 3 — Live Manual Tracking (Next Up) ⏳
-- Evaluate and select free-tier tracking provider (17TRACK / Ship24).
-- Implement `ITrackingProvider` adapter interface.
-- Implement live tracking registration and status polling.
-- Handle provider rate limits, retries, and network timeouts.
+### Milestone 3 — Live Multi-Carrier Tracking Adapter ✅
+- [x] Implemented `ITrackingProvider` interface and extensible provider architecture.
+- [x] Integrated **17TRACK API v2.2** provider (`SeventeenTrackProvider`) supporting Indian and international carriers (Delhivery, Blue Dart, DTDC, India Post, Ekart, Xpressbees, DHL, FedEx, UPS).
+- [x] Added live server-side Route Handlers:
+  - `/api/tracking` (validates, calls tracking provider, registers shipment, inserts normalized events into `tracking_events`, creates notification in `notifications`).
+  - `/api/tracking/refresh` (re-polls tracking provider, appends new tracking events, updates delivery estimate and last checked time).
+- [x] Upgraded Quick Track UI with **Product / Item Name input** (e.g. "Headphones", "Shoes"), Store Selector, and manual courier override.
+- [x] Built normalized status pipeline mapping courier events to canonical states (`IN_TRANSIT`, `OUT_FOR_DELIVERY`, `DELIVERED`, `EXCEPTION`, `DELAYED`, `LABEL_CREATED`).
 
-### Milestone 4 — Tracking Updates & Notifications ⏳
+### Milestone 4 — Tracking Updates & Notifications (Next Up) ⏳
 - Webhook receiver or cron-based polling worker.
 - Normalization pipeline for status changes.
 - Email delivery notifications & Web Push where supported.
