@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { ResponsiveSidebar, NavTab } from "@/components/layout/ResponsiveSidebar";
 import { MobileNavigation } from "@/components/layout/MobileNavigation";
 import { AppHeader } from "@/components/layout/AppHeader";
@@ -10,20 +12,95 @@ import { ShipmentCard } from "@/components/ui/ShipmentCard";
 import { ShipmentDetailsModal } from "@/components/ui/ShipmentDetailsModal";
 import { UpcomingDeliveriesPanel } from "@/components/ui/UpcomingDeliveriesPanel";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingSummarySkeleton, LoadingSkeletonCard } from "@/components/ui/LoadingState";
 import { BrandAssetsViewer } from "@/components/brand/BrandAssetsViewer";
 import { DEMO_SHIPMENTS, DEMO_NOTIFICATIONS, computeSummary } from "@/data/demo-shipments";
 import { Shipment, NotificationItem, CarrierInfo } from "@/types/shipment";
-import { Sparkles } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { mapDbShipmentToFrontend, mapDbNotificationToFrontend, DbShipment, DbNotification } from "@/lib/mappers";
+import { Sparkles, User, Loader2 } from "lucide-react";
 
-export default function DashboardPage() {
+function DashboardContent() {
+  const searchParams = useSearchParams();
+  const isDemo = searchParams.get("demo") === "true";
+
   const [activeNavTab, setActiveNavTab] = useState<NavTab>("dashboard");
-  const [shipments, setShipments] = useState<Shipment[]>(DEMO_SHIPMENTS);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(DEMO_NOTIFICATIONS);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSummaryFilter, setSelectedSummaryFilter] = useState<SummaryFilterType>("all");
   const [carrierFilter, setCarrierFilter] = useState<string>("all");
+  
+  // Auth state
+  const [currentUser, setCurrentUser] = useState<{ id: string; email?: string; name?: string } | null>(null);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
+  const supabase = createClient();
+
+  // Load real data from Supabase or fallback to demo
+  const loadData = useCallback(async () => {
+    setIsLoadingData(true);
+
+    if (!supabase || isDemo) {
+      // Demo fallback
+      setShipments(DEMO_SHIPMENTS);
+      setNotifications(DEMO_NOTIFICATIONS);
+      setCurrentUser({ id: "demo-user", email: "demo@wherebox.app", name: "Aman Mehta (Demo)" });
+      setIsLoadingData(false);
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        // Fallback to demo mode if not logged in
+        setShipments(DEMO_SHIPMENTS);
+        setNotifications(DEMO_NOTIFICATIONS);
+        setCurrentUser(null);
+        setIsLoadingData(false);
+        return;
+      }
+
+      // User profile
+      const name = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")[0] || "User";
+      setCurrentUser({ id: user.id, email: user.email, name });
+
+      // Fetch user's shipments with tracking events
+      const { data: dbShipments, error: shipError } = await supabase
+        .from("shipments")
+        .select("*, events:tracking_events(*)")
+        .order("created_at", { ascending: false });
+
+      if (!shipError && dbShipments) {
+        const mapped = (dbShipments as DbShipment[]).map(mapDbShipmentToFrontend);
+        setShipments(mapped);
+      }
+
+      // Fetch user's notifications
+      const { data: dbNotifs, error: notifError } = await supabase
+        .from("notifications")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!notifError && dbNotifs) {
+        const mappedNotifs = (dbNotifs as DbNotification[]).map(mapDbNotificationToFrontend);
+        setNotifications(mappedNotifs);
+      }
+    } catch {
+      // Graceful fallback to demo on exception
+      setShipments(DEMO_SHIPMENTS);
+      setNotifications(DEMO_NOTIFICATIONS);
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [supabase, isDemo]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Compute live summary statistics
   const summary = useMemo(() => computeSummary(shipments), [shipments]);
@@ -64,7 +141,7 @@ export default function DashboardPage() {
         return false;
       }
 
-      // Search query filter (matches tracking number, store, carrier, product, order)
+      // Search query filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim();
         const matchesNumber = s.trackingNumber.toLowerCase().includes(query);
@@ -82,107 +159,206 @@ export default function DashboardPage() {
     });
   }, [shipments, activeNavTab, selectedSummaryFilter, carrierFilter, searchQuery]);
 
-  // Handle adding a new shipment from Quick Track
+  // Handle adding a new shipment
   const handleAddShipment = async (payload: {
     trackingNumber: string;
     storeName?: string;
     carrier?: CarrierInfo;
   }): Promise<{ success: boolean; message?: string }> => {
-    await new Promise((r) => setTimeout(r, 600));
-
     const carrierName = payload.carrier?.name || "India Post / Multi-Carrier";
     const carrierCode = payload.carrier?.code || "generic";
     const nowIso = new Date().toISOString();
 
-    const newShipment: Shipment = {
-      id: `ship-${Date.now()}`,
-      userId: "demo-user",
-      trackingNumber: payload.trackingNumber,
-      carrierCode,
-      carrierName,
-      sourceType: "manual",
-      storeName: payload.storeName || "Online Store",
-      orderReference: `WB-${Math.floor(100000 + Math.random() * 900000)}`,
-      itemLabel: "Standard Package Shipment",
-      normalizedStatus: "IN_TRANSIT",
-      rawStatus: `Shipment picked up by ${carrierName}`,
-      estimatedDeliveryAt: new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
-      shippedAt: nowIso,
-      lastEventAt: nowIso,
-      lastCheckedAt: nowIso,
-      providerName: "MockProvider",
-      isArchived: false,
-      createdAt: nowIso,
-      updatedAt: nowIso,
-      events: [
-        {
-          id: `evt-${Date.now()}-1`,
-          shipmentId: `ship-${Date.now()}`,
-          normalizedStatus: "IN_TRANSIT",
+    // Check duplicate in current state
+    if (shipments.some((s) => s.trackingNumber.toUpperCase() === payload.trackingNumber.toUpperCase())) {
+      return {
+        success: false,
+        message: `Package #${payload.trackingNumber} is already in your dashboard.`,
+      };
+    }
+
+    if (supabase && currentUser && !isDemo) {
+      try {
+        // 1. Insert shipment into Supabase
+        const { data: dbShipment, error: shipError } = await supabase
+          .from("shipments")
+          .insert({
+            user_id: currentUser.id,
+            tracking_number: payload.trackingNumber,
+            carrier_code: carrierCode,
+            carrier_name: carrierName,
+            source_type: "manual",
+            store_name: payload.storeName || "Online Store",
+            order_reference: `WB-${Math.floor(100000 + Math.random() * 900000)}`,
+            item_label: "Standard Package Shipment",
+            normalized_status: "IN_TRANSIT",
+            raw_status: `Shipment registered with ${carrierName}`,
+            estimated_delivery_at: new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
+            shipped_at: nowIso,
+            last_event_at: nowIso,
+            last_checked_at: nowIso,
+            provider_name: "manual",
+          })
+          .select()
+          .single();
+
+        if (shipError || !dbShipment) {
+          return {
+            success: false,
+            message: shipError?.message || "Failed to save shipment to database.",
+          };
+        }
+
+        // 2. Insert initial tracking event
+        await supabase.from("tracking_events").insert({
+          shipment_id: dbShipment.id,
+          normalized_status: "IN_TRANSIT",
           description: `Shipment registered and in transit with ${carrierName}`,
           location: "Central Logistics Hub",
           timestamp: nowIso,
-        },
-      ],
-    };
+        });
 
-    setShipments((prev) => [newShipment, ...prev]);
+        // 3. Insert notification
+        await supabase.from("notifications").insert({
+          user_id: currentUser.id,
+          shipment_id: dbShipment.id,
+          tracking_number: payload.trackingNumber,
+          store_name: payload.storeName || "Online Store",
+          title: "Package Added",
+          message: `Tracking initiated for #${payload.trackingNumber} via ${carrierName}`,
+          status: "IN_TRANSIT",
+        });
 
-    // Add in-app notification
-    const newNotif: NotificationItem = {
-      id: `notif-${Date.now()}`,
-      shipmentId: newShipment.id,
-      trackingNumber: newShipment.trackingNumber,
-      storeName: newShipment.storeName,
-      title: "Package Added",
-      message: `Tracking initiated for #${newShipment.trackingNumber} via ${carrierName}`,
-      status: "IN_TRANSIT",
-      timestamp: nowIso,
-      isRead: false,
-    };
-    setNotifications((prev) => [newNotif, ...prev]);
+        // Refresh live data
+        await loadData();
 
-    return {
-      success: true,
-      message: `Package #${payload.trackingNumber} added and tracking initialized!`,
-    };
+        return {
+          success: true,
+          message: `Package #${payload.trackingNumber} saved to your vault!`,
+        };
+      } catch {
+        return {
+          success: false,
+          message: "Database connection failed. Please try again.",
+        };
+      }
+    } else {
+      // Local demo mode state update
+      const newShipment: Shipment = {
+        id: `ship-${Date.now()}`,
+        userId: "demo-user",
+        trackingNumber: payload.trackingNumber,
+        carrierCode,
+        carrierName,
+        sourceType: "manual",
+        storeName: payload.storeName || "Online Store",
+        orderReference: `WB-${Math.floor(100000 + Math.random() * 900000)}`,
+        itemLabel: "Standard Package Shipment",
+        normalizedStatus: "IN_TRANSIT",
+        rawStatus: `Shipment registered with ${carrierName}`,
+        estimatedDeliveryAt: new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
+        shippedAt: nowIso,
+        lastEventAt: nowIso,
+        lastCheckedAt: nowIso,
+        providerName: "manual",
+        isArchived: false,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        events: [
+          {
+            id: `evt-${Date.now()}`,
+            shipmentId: `ship-${Date.now()}`,
+            normalizedStatus: "IN_TRANSIT",
+            description: `Shipment registered and in transit with ${carrierName}`,
+            location: "Central Logistics Hub",
+            timestamp: nowIso,
+          },
+        ],
+      };
+
+      setShipments((prev) => [newShipment, ...prev]);
+
+      const newNotif: NotificationItem = {
+        id: `notif-${Date.now()}`,
+        shipmentId: newShipment.id,
+        trackingNumber: newShipment.trackingNumber,
+        storeName: newShipment.storeName,
+        title: "Package Added",
+        message: `Tracking initiated for #${newShipment.trackingNumber} via ${carrierName}`,
+        status: "IN_TRANSIT",
+        timestamp: nowIso,
+        isRead: false,
+      };
+      setNotifications((prev) => [newNotif, ...prev]);
+
+      return {
+        success: true,
+        message: `Package #${payload.trackingNumber} added to demo dashboard!`,
+      };
+    }
   };
 
   // Archive shipment
-  const handleArchive = (shipmentId: string) => {
-    setShipments((prev) =>
-      prev.map((s) => (s.id === shipmentId ? { ...s, isArchived: !s.isArchived } : s))
-    );
+  const handleArchive = async (shipmentId: string) => {
+    const target = shipments.find((s) => s.id === shipmentId);
+    if (!target) return;
+
+    if (supabase && currentUser && !isDemo) {
+      await supabase
+        .from("shipments")
+        .update({ is_archived: !target.isArchived })
+        .eq("id", shipmentId);
+      await loadData();
+    } else {
+      setShipments((prev) =>
+        prev.map((s) => (s.id === shipmentId ? { ...s, isArchived: !s.isArchived } : s))
+      );
+    }
   };
 
   // Delete shipment
-  const handleDelete = (shipmentId: string) => {
-    setShipments((prev) => prev.filter((s) => s.id !== shipmentId));
+  const handleDelete = async (shipmentId: string) => {
+    if (supabase && currentUser && !isDemo) {
+      await supabase.from("shipments").delete().eq("id", shipmentId);
+      await loadData();
+    } else {
+      setShipments((prev) => prev.filter((s) => s.id !== shipmentId));
+    }
   };
 
-  // Refresh shipment tracking info
+  // Refresh shipment
   const handleRefresh = async (shipmentId: string) => {
-    await new Promise((r) => setTimeout(r, 600));
-    setShipments((prev) =>
-      prev.map((s) => {
-        if (s.id === shipmentId) {
-          return {
-            ...s,
-            lastCheckedAt: new Date().toISOString(),
-          };
-        }
-        return s;
-      })
-    );
+    if (supabase && currentUser && !isDemo) {
+      await supabase
+        .from("shipments")
+        .update({ last_checked_at: new Date().toISOString() })
+        .eq("id", shipmentId);
+      await loadData();
+    } else {
+      await new Promise((r) => setTimeout(r, 600));
+      setShipments((prev) =>
+        prev.map((s) => (s.id === shipmentId ? { ...s, lastCheckedAt: new Date().toISOString() } : s))
+      );
+    }
   };
 
-  // Notification actions
-  const handleMarkAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+  // Notifications
+  const handleMarkAllRead = async () => {
+    if (supabase && currentUser && !isDemo) {
+      await supabase.from("notifications").update({ is_read: true }).eq("user_id", currentUser.id);
+      await loadData();
+    } else {
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    }
   };
 
-  const handleClearAllNotifications = () => {
-    setNotifications([]);
+  const handleClearAllNotifications = async () => {
+    if (supabase && currentUser && !isDemo) {
+      await supabase.from("notifications").delete().eq("user_id", currentUser.id);
+      await loadData();
+    } else {
+      setNotifications([]);
+    }
   };
 
   const handleSelectFromNotification = (shipmentId: string) => {
@@ -227,10 +403,30 @@ export default function DashboardPage() {
           onMarkAllAsRead={handleMarkAllRead}
           onClearAllNotifications={handleClearAllNotifications}
           onSelectShipment={handleSelectFromNotification}
+          userName={currentUser?.name || "Aman Mehta"}
+          userEmail={currentUser?.email}
+          isDemo={isDemo}
         />
 
+        {/* Demo Mode Notice Banner if viewing via ?demo=true */}
+        {isDemo && (
+          <div className="bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-teal-500/10 border-b border-indigo-100 px-4 py-2.5 text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2 text-indigo-900 font-medium">
+              <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span>You are viewing WhereBox in Demo Mode with mock shipment fixtures.</span>
+            </div>
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-1 font-bold text-indigo-600 hover:text-indigo-800 bg-white px-2.5 py-1 rounded-lg border border-indigo-200 shadow-xs"
+            >
+              <User className="w-3 h-3" />
+              <span>Sign In to Your Vault</span>
+            </Link>
+          </div>
+        )}
+
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6 sm:space-y-8">
-          {/* Settings Tab: Shows Brand Assets & System Info */}
+          {/* Settings Tab */}
           {activeNavTab === "settings" ? (
             <div className="space-y-6">
               <div className="border-b border-slate-200/80 pb-4">
@@ -257,7 +453,7 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
                       <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                      Tracking Hub Online
+                      Live Vault Connected
                     </span>
                   </div>
                 </div>
@@ -270,43 +466,47 @@ export default function DashboardPage() {
               </div>
 
               {/* Summary Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                <SummaryCard
-                  type="all"
-                  label="Total Packages"
-                  count={summary.total}
-                  isActive={selectedSummaryFilter === "all"}
-                  onClick={() => setSelectedSummaryFilter("all")}
-                />
-                <SummaryCard
-                  type="in_transit"
-                  label="In Transit"
-                  count={summary.inTransit}
-                  isActive={selectedSummaryFilter === "in_transit"}
-                  onClick={() => setSelectedSummaryFilter("in_transit")}
-                />
-                <SummaryCard
-                  type="out_for_delivery"
-                  label="Out for Delivery"
-                  count={summary.outForDelivery}
-                  isActive={selectedSummaryFilter === "out_for_delivery"}
-                  onClick={() => setSelectedSummaryFilter("out_for_delivery")}
-                />
-                <SummaryCard
-                  type="delivered"
-                  label="Delivered"
-                  count={summary.delivered}
-                  isActive={selectedSummaryFilter === "delivered"}
-                  onClick={() => setSelectedSummaryFilter("delivered")}
-                />
-                <SummaryCard
-                  type="exceptions"
-                  label="Delayed / Exception"
-                  count={summary.delayedOrException}
-                  isActive={selectedSummaryFilter === "exceptions"}
-                  onClick={() => setSelectedSummaryFilter("exceptions")}
-                />
-              </div>
+              {isLoadingData ? (
+                <LoadingSummarySkeleton />
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                  <SummaryCard
+                    type="all"
+                    label="Total Packages"
+                    count={summary.total}
+                    isActive={selectedSummaryFilter === "all"}
+                    onClick={() => setSelectedSummaryFilter("all")}
+                  />
+                  <SummaryCard
+                    type="in_transit"
+                    label="In Transit"
+                    count={summary.inTransit}
+                    isActive={selectedSummaryFilter === "in_transit"}
+                    onClick={() => setSelectedSummaryFilter("in_transit")}
+                  />
+                  <SummaryCard
+                    type="out_for_delivery"
+                    label="Out for Delivery"
+                    count={summary.outForDelivery}
+                    isActive={selectedSummaryFilter === "out_for_delivery"}
+                    onClick={() => setSelectedSummaryFilter("out_for_delivery")}
+                  />
+                  <SummaryCard
+                    type="delivered"
+                    label="Delivered"
+                    count={summary.delivered}
+                    isActive={selectedSummaryFilter === "delivered"}
+                    onClick={() => setSelectedSummaryFilter("delivered")}
+                  />
+                  <SummaryCard
+                    type="exceptions"
+                    label="Delayed / Exception"
+                    count={summary.delayedOrException}
+                    isActive={selectedSummaryFilter === "exceptions"}
+                    onClick={() => setSelectedSummaryFilter("exceptions")}
+                  />
+                </div>
+              )}
 
               {/* Main Content Split: Left (Shipment List) + Right (Upcoming Panel) */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -357,7 +557,12 @@ export default function DashboardPage() {
                   </div>
 
                   {/* List of Shipments */}
-                  {filteredShipments.length === 0 ? (
+                  {isLoadingData ? (
+                    <div className="space-y-3">
+                      <LoadingSkeletonCard />
+                      <LoadingSkeletonCard />
+                    </div>
+                  ) : filteredShipments.length === 0 ? (
                     <EmptyState
                       filtered={Boolean(searchQuery || selectedSummaryFilter !== "all" || carrierFilter !== "all")}
                       onAction={() => {
@@ -387,14 +592,14 @@ export default function DashboardPage() {
                     onSelectShipment={openDetails}
                   />
 
-                  {/* Multi-carrier preview */}
+                  {/* Security & Multi-Carrier Note */}
                   <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500/5 via-purple-500/5 to-teal-500/5 border border-indigo-100/70">
                     <div className="flex items-center gap-2 text-indigo-900 font-bold text-xs">
                       <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>Multi-Carrier Coverage</span>
+                      <span>Encrypted & Scoped to You</span>
                     </div>
                     <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-                      Optimized for Indian delivery networks: Delhivery, Blue Dart, DTDC, India Post, Ekart, Xpressbees, and global express couriers.
+                      All your packages are secured by PostgreSQL Row Level Security. Only your authenticated session can access them.
                     </p>
                   </div>
                 </div>
@@ -428,5 +633,24 @@ export default function DashboardPage() {
         onDelete={handleDelete}
       />
     </div>
+  );
+}
+
+function DashboardLoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
+      <div className="flex flex-col items-center gap-3">
+        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+        <p className="text-xs font-semibold text-slate-500">Loading WhereBox...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<DashboardLoadingFallback />}>
+      <DashboardContent />
+    </Suspense>
   );
 }
