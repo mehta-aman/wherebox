@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
   title: "WhereBox — Every package. One place.",
@@ -32,6 +33,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="antialiased scroll-smooth">
       <body className="min-h-screen bg-[#F8FAFC] text-[#0F172A] selection:bg-indigo-500 selection:text-white pb-20 md:pb-0">
+        <ServiceWorkerRegister />
         {children}
       </body>
     </html>

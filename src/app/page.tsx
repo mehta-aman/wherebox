@@ -10,6 +10,7 @@ import { TrackingInput } from "@/components/ui/TrackingInput";
 import { SummaryCard, SummaryFilterType } from "@/components/ui/SummaryCard";
 import { ShipmentCard } from "@/components/ui/ShipmentCard";
 import { ShipmentDetailsModal } from "@/components/ui/ShipmentDetailsModal";
+import { EmailSyncModal } from "@/components/ui/EmailSyncModal";
 import { UpcomingDeliveriesPanel } from "@/components/ui/UpcomingDeliveriesPanel";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingSummarySkeleton, LoadingSkeletonCard } from "@/components/ui/LoadingState";
@@ -18,7 +19,7 @@ import { DEMO_SHIPMENTS, DEMO_NOTIFICATIONS, computeSummary } from "@/data/demo-
 import { Shipment, NotificationItem, CarrierInfo } from "@/types/shipment";
 import { createClient } from "@/lib/supabase/client";
 import { mapDbShipmentToFrontend, mapDbNotificationToFrontend, DbShipment, DbNotification } from "@/lib/mappers";
-import { Sparkles, User, Loader2 } from "lucide-react";
+import { Sparkles, User, Loader2, Mail } from "lucide-react";
 
 function DashboardContent() {
   const searchParams = useSearchParams();
@@ -29,6 +30,7 @@ function DashboardContent() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isEmailSyncOpen, setIsEmailSyncOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSummaryFilter, setSelectedSummaryFilter] = useState<SummaryFilterType>("all");
   const [carrierFilter, setCarrierFilter] = useState<string>("all");
@@ -482,6 +484,15 @@ function DashboardContent() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsEmailSyncOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200/80 transition-colors shadow-2xs"
+                    >
+                      <Mail className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Gmail Sync</span>
+                    </button>
+
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
                       <span className="w-2 h-2 rounded-full bg-emerald-500" />
                       Live Vault Connected
@@ -663,6 +674,15 @@ function DashboardContent() {
         onArchive={handleArchive}
         onDelete={handleDelete}
         onUpdate={handleUpdateShipment}
+      />
+
+      {/* Gmail & Email Order Sync Modal */}
+      <EmailSyncModal
+        isOpen={isEmailSyncOpen}
+        onClose={() => setIsEmailSyncOpen(false)}
+        onShipmentDiscovered={() => {
+          loadData();
+        }}
       />
     </div>
   );

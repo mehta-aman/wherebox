@@ -13,7 +13,8 @@ import {
   Mail,
   Truck,
   Building2,
-  Package
+  Package,
+  AlertCircle
 } from "lucide-react";
 import { formatRelativeTime, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -54,6 +55,14 @@ export function ShipmentCard({
   const storeName = shipment.storeName || "Online Store";
   const packageName = shipment.itemLabel || shipment.storeName || "Package Shipment";
 
+  // Delivery delay heuristic (>48h without scan)
+  const lastScanTime = new Date(shipment.lastEventAt || shipment.createdAt).getTime();
+  const hoursSinceScan = !isNaN(lastScanTime) ? (Date.now() - lastScanTime) / (1000 * 60 * 60) : 0;
+  const isStagnant =
+    hoursSinceScan > 48 &&
+    shipment.normalizedStatus !== "DELIVERED" &&
+    !shipment.isArchived;
+
   return (
     <div
       onClick={() => onSelect(shipment)}
@@ -78,6 +87,16 @@ export function ShipmentCard({
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200/60">
               <Mail className="w-2.5 h-2.5" />
               Gmail
+            </span>
+          )}
+
+          {isStagnant && (
+            <span
+              title="Heuristic: No recent scan recorded in >48h. Awaiting regional hub scan."
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80"
+            >
+              <AlertCircle className="w-3 h-3 text-amber-500" />
+              <span>Scan Pending (&gt;48h)</span>
             </span>
           )}
         </div>

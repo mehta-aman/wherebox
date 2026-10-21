@@ -45,8 +45,15 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/forgot-password") ||
     pathname.startsWith("/auth");
 
+  const isApiRoute = pathname.startsWith("/api");
+
   // Allow preview with ?demo=true for visual review without login
   const isDemo = request.nextUrl.searchParams.get("demo") === "true";
+
+  // Allow API routes to handle their own JSON responses without redirecting to /login HTML
+  if (isApiRoute) {
+    return response;
+  }
 
   // Redirect unauthenticated users to /login
   if (!user && !isAuthRoute && !isDemo) {
@@ -67,6 +74,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|favicon.svg|icons/|manifest.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|favicon.svg|icons/|manifest.json|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

@@ -23,7 +23,8 @@ import {
   Tag,
   Receipt,
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
 import { formatDate, formatRelativeTime } from "@/lib/utils";
 
@@ -110,6 +111,11 @@ export function ShipmentDetailsModal({
   const brandName = shipment.storeName || "Direct Consignment";
   const courierName = shipment.carrierName || "Express Courier";
   const sourceName = shipment.providerName || (shipment.sourceType === "email" ? "Gmail Auto-Sync" : "Direct Carrier API");
+
+  // Delivery delay heuristic
+  const lastScanTime = new Date(shipment.lastEventAt || shipment.createdAt).getTime();
+  const hoursSinceScan = !isNaN(lastScanTime) ? Math.round((Date.now() - lastScanTime) / (1000 * 60 * 60)) : 0;
+  const isStagnant = hoursSinceScan > 48 && shipment.normalizedStatus !== "DELIVERED" && !shipment.isArchived;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto animate-in fade-in duration-200">
@@ -366,6 +372,19 @@ export function ShipmentDetailsModal({
               </span>
             </div>
           </div>
+
+          {/* Delivery Delay Heuristic Banner */}
+          {isStagnant && (
+            <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200/80 text-xs text-amber-900 flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <p className="font-bold">Delivery Heuristic Note: Scan Pending ({hoursSinceScan}h)</p>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  No new checkpoint scan has been recorded in {hoursSinceScan} hours. In regional logistics, parcels frequently travel inside linehaul transit trucks between main hubs before registering the destination arrival scan. This is not a delivery failure.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Verbatim Courier Status Scan Note */}
           <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs">
