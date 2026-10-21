@@ -24,6 +24,7 @@ export interface ProviderTrackingResult {
   providerShipmentId?: string;
   destinationCity?: string;
   orderReference?: string;
+  paymentMode?: string;
   errorMessage?: string;
 }
 

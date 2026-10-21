@@ -316,6 +316,63 @@ function DashboardContent() {
     }
   };
 
+  // Update order details (product name, store name, order reference)
+  const handleUpdateShipment = async (
+    shipmentId: string,
+    updates: { itemLabel?: string; storeName?: string; orderReference?: string }
+  ) => {
+    if (currentUser && !isDemo) {
+      const res = await fetch("/api/tracking/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shipmentId,
+          ...updates,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to update order details.");
+      }
+
+      await loadData();
+      // Keep selected shipment state updated
+      setSelectedShipment((prev) =>
+        prev && prev.id === shipmentId
+          ? {
+              ...prev,
+              itemLabel: updates.itemLabel ?? prev.itemLabel,
+              storeName: updates.storeName ?? prev.storeName,
+              orderReference: updates.orderReference ?? prev.orderReference,
+            }
+          : prev
+      );
+    } else {
+      setShipments((prev) =>
+        prev.map((s) =>
+          s.id === shipmentId
+            ? {
+                ...s,
+                itemLabel: updates.itemLabel ?? s.itemLabel,
+                storeName: updates.storeName ?? s.storeName,
+                orderReference: updates.orderReference ?? s.orderReference,
+              }
+            : s
+        )
+      );
+      setSelectedShipment((prev) =>
+        prev && prev.id === shipmentId
+          ? {
+              ...prev,
+              itemLabel: updates.itemLabel ?? prev.itemLabel,
+              storeName: updates.storeName ?? prev.storeName,
+              orderReference: updates.orderReference ?? prev.orderReference,
+            }
+          : prev
+      );
+    }
+  };
+
   // Notifications
   const handleMarkAllRead = async () => {
     if (supabase && currentUser && !isDemo) {
@@ -605,6 +662,7 @@ function DashboardContent() {
         onRefresh={handleRefresh}
         onArchive={handleArchive}
         onDelete={handleDelete}
+        onUpdate={handleUpdateShipment}
       />
     </div>
   );

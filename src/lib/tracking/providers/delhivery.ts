@@ -143,6 +143,7 @@ export class DelhiveryProvider implements ITrackingProvider {
         providerShipmentId: pkg.referenceNo || undefined,
         destinationCity: pkg.destination || undefined,
         orderReference: pkg.referenceNo || undefined,
+        paymentMode: pkg.packageType ? (pkg.packageType === "COD" ? "Cash on Delivery (COD)" : "Prepaid") : undefined,
       };
     } catch (err) {
       return {

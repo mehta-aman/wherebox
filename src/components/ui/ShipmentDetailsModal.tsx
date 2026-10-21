@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Shipment } from "@/types/shipment";
 import { StatusBadge } from "./StatusBadge";
 import { ShipmentTimeline } from "./ShipmentTimeline";
@@ -17,7 +17,13 @@ import {
   Truck,
   Building2,
   Globe,
-  Clock
+  Clock,
+  Edit2,
+  Save,
+  Tag,
+  Receipt,
+  Sparkles,
+  CheckCircle2
 } from "lucide-react";
 import { formatDate, formatRelativeTime } from "@/lib/utils";
 
@@ -28,6 +34,10 @@ interface ShipmentDetailsModalProps {
   onRefresh?: (shipmentId: string) => Promise<void>;
   onArchive?: (shipmentId: string) => void;
   onDelete?: (shipmentId: string) => void;
+  onUpdate?: (
+    shipmentId: string,
+    updates: { itemLabel?: string; storeName?: string; orderReference?: string }
+  ) => Promise<void>;
 }
 
 export function ShipmentDetailsModal({
@@ -37,9 +47,28 @@ export function ShipmentDetailsModal({
   onRefresh,
   onArchive,
   onDelete,
+  onUpdate,
 }: ShipmentDetailsModalProps) {
   const [copied, setCopied] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Editable fields
+  const [editItemLabel, setEditItemLabel] = useState("");
+  const [editStoreName, setEditStoreName] = useState("");
+  const [editOrderRef, setEditOrderRef] = useState("");
+
+  useEffect(() => {
+    if (shipment) {
+      setEditItemLabel(shipment.itemLabel || "");
+      setEditStoreName(shipment.storeName || "");
+      setEditOrderRef(shipment.orderReference || "");
+      setIsEditing(false);
+      setSaveSuccess(false);
+    }
+  }, [shipment]);
 
   if (!isOpen || !shipment) return null;
 
@@ -54,6 +83,26 @@ export function ShipmentDetailsModal({
       setIsRefreshing(true);
       await onRefresh(shipment.id);
       setIsRefreshing(false);
+    }
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onUpdate) return;
+    setIsSaving(true);
+    try {
+      await onUpdate(shipment.id, {
+        itemLabel: editItemLabel.trim() || undefined,
+        storeName: editStoreName.trim() || undefined,
+        orderReference: editOrderRef.trim() || undefined,
+      });
+      setSaveSuccess(true);
+      setIsEditing(false);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch {
+      // handled
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -92,31 +141,129 @@ export function ShipmentDetailsModal({
                 {shipment.orderReference && (
                   <>
                     <span>•</span>
-                    <span className="font-mono text-slate-400">Ref #{shipment.orderReference}</span>
+                    <span className="font-mono text-slate-500 font-semibold">
+                      Ref #{shipment.orderReference.replace(/^#/, "")}
+                    </span>
                   </>
                 )}
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onUpdate && !isEditing && (
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200/60 transition-colors"
+                title="Edit item title and order details"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Edit Details</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable Content */}
         <div className="p-5 sm:p-6 overflow-y-auto space-y-5">
+          {/* Success Banner if just saved */}
+          {saveSuccess && (
+            <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800 flex items-center gap-2 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Order details updated successfully!</span>
+            </div>
+          )}
+
+          {/* Edit Form Mode */}
+          {isEditing ? (
+            <form onSubmit={handleSave} className="p-4 sm:p-5 rounded-2xl bg-indigo-50/50 border border-indigo-100 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-950 uppercase tracking-wider">
+                  <Tag className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Customize Order Information</span>
+                </div>
+                <span className="text-[11px] text-indigo-600 font-medium">Saved to your private vault</span>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Product / Item Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editItemLabel}
+                    onChange={(e) => setEditItemLabel(e.target.value)}
+                    placeholder="e.g. Nike Air Jordan 1, Apple AirPods Pro, Linen Shirt"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Store / Brand / Platform
+                    </label>
+                    <input
+                      type="text"
+                      value={editStoreName}
+                      onChange={(e) => setEditStoreName(e.target.value)}
+                      placeholder="e.g. Amazon, Flipkart, Myntra, Zara"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Order ID / Reference
+                    </label>
+                    <input
+                      type="text"
+                      value={editOrderRef}
+                      onChange={(e) => setEditOrderRef(e.target.value)}
+                      placeholder="e.g. #OD4281928, #544099"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-indigo-100">
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200/60 transition-colors"
+                >
+                  Cancel
+                </button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="primary"
+                  isLoading={isSaving}
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save Details</span>
+                </Button>
+              </div>
+            </form>
+          ) : null}
+
           {/* 4-Card Full Specification Grid (Package Name, Courier, Brand, Source) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* 1. Full Package Name */}
             <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/80">
               <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 <Package className="w-3.5 h-3.5 text-indigo-500" />
-                <span>Full Package Name</span>
+                <span>Product / Item Label</span>
               </div>
               <p className="text-sm font-bold text-slate-900 mt-1 leading-snug">
                 {packageName}
@@ -195,6 +342,28 @@ export function ShipmentDetailsModal({
                     : "Carrier Pending Estimate"}
                 </span>
               </div>
+            </div>
+          </div>
+
+          {/* Order Details & Logistics Reference Banner */}
+          <div className="p-3.5 rounded-2xl bg-slate-50/90 border border-slate-200/80 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <Receipt className="w-3.5 h-3.5 text-indigo-600" />
+                Logistics & Order Reference
+              </span>
+              {shipment.orderReference && (
+                <span className="text-xs font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
+                  {shipment.orderReference}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 pt-1 text-[11px] text-slate-600">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+              <span>
+                <strong>Gmail Auto-Discovery (Milestone 5):</strong> Connects directly to Amazon, Flipkart & Myntra order emails to automatically sync product photos, item titles, and invoices.
+              </span>
             </div>
           </div>
 

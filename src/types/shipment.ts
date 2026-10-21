@@ -37,6 +37,8 @@ export interface Shipment {
   storeName?: string;
   orderReference?: string;
   itemLabel?: string;
+  destinationCity?: string;
+  paymentMode?: string;
   normalizedStatus: NormalizedStatus;
   rawStatus: string;
   estimatedDeliveryAt?: string;
