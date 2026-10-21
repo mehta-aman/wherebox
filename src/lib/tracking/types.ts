@@ -22,6 +22,8 @@ export interface ProviderTrackingResult {
   events: ProviderTrackingEvent[];
   providerName: string;
   providerShipmentId?: string;
+  destinationCity?: string;
+  orderReference?: string;
   errorMessage?: string;
 }
 

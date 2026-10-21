@@ -141,6 +141,8 @@ export class DelhiveryProvider implements ITrackingProvider {
         events,
         providerName: this.name,
         providerShipmentId: pkg.referenceNo || undefined,
+        destinationCity: pkg.destination || undefined,
+        orderReference: pkg.referenceNo || undefined,
       };
     } catch (err) {
       return {

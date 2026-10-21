@@ -44,6 +44,32 @@ export async function POST(request: Request) {
     // Call Tracking Provider Adapter to fetch carrier scans & status
     const trackingResult = await trackShipment(cleanNumber, carrierCode);
 
+    // Determine platform / store name automatically if not provided
+    let finalStore = storeName?.trim();
+    if (!finalStore) {
+      if (trackingResult.carrierCode === "ekart") {
+        finalStore = "Flipkart";
+      } else if (cleanNumber.startsWith("TBA") || trackingResult.carrierCode === "amazon_in") {
+        finalStore = "Amazon";
+      } else if (trackingResult.carrierCode === "bluedart") {
+        finalStore = "Blue Dart Express";
+      } else {
+        finalStore = `${trackingResult.carrierName} Package`;
+      }
+    }
+
+    // Determine product / item label automatically if not provided
+    let finalItemLabel = itemLabel?.trim();
+    if (!finalItemLabel) {
+      if (trackingResult.destinationCity) {
+        finalItemLabel = `Delivery to ${trackingResult.destinationCity}`;
+      } else {
+        finalItemLabel = `${trackingResult.carrierName} Shipment`;
+      }
+    }
+
+    const finalOrderRef = orderReference?.trim() || trackingResult.orderReference || `WB-${Math.floor(100000 + Math.random() * 900000)}`;
+
     // Insert shipment into Supabase
     const { data: newShipment, error: insertError } = await supabase
       .from("shipments")
@@ -53,9 +79,9 @@ export async function POST(request: Request) {
         carrier_code: trackingResult.carrierCode,
         carrier_name: trackingResult.carrierName,
         source_type: "manual",
-        store_name: storeName?.trim() || null,
-        order_reference: orderReference?.trim() || `WB-${Math.floor(100000 + Math.random() * 900000)}`,
-        item_label: itemLabel?.trim() || "Package Shipment",
+        store_name: finalStore,
+        order_reference: finalOrderRef,
+        item_label: finalItemLabel,
         normalized_status: trackingResult.normalizedStatus,
         raw_status: trackingResult.rawStatus,
         estimated_delivery_at: trackingResult.estimatedDeliveryAt || null,
