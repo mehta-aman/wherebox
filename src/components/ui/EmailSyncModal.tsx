@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "./Button";
 import { 
   X, 
@@ -9,7 +9,10 @@ import {
   ArrowRight, 
   CheckCircle2, 
   AlertCircle, 
-  ShieldCheck 
+  ShieldCheck,
+  RotateCw,
+  LogOut,
+  ExternalLink
 } from "lucide-react";
 import { parseOrderEmail } from "@/lib/email/parser";
 
@@ -37,13 +40,95 @@ export function EmailSyncModal({
   const [senderEmail, setSenderEmail] = useState("auto-confirm@amazon.in");
   const [subject, setSubject] = useState("Dispatched: Apple AirPods Pro (2nd Gen)");
   const [isLoading, setIsLoading] = useState(false);
+  const [isGmailSyncing, setIsGmailSyncing] = useState(false);
+  const [googleAccount, setGoogleAccount] = useState<{
+    connected: boolean;
+    email?: string;
+    lastSyncedAt?: string;
+  }>({ connected: false });
   const [resultMessage, setResultMessage] = useState<{
     type: "success" | "error";
     text: string;
     details?: string;
   } | null>(null);
 
+  // Check Google connected status when modal opens
+  const checkGoogleStatus = useCallback(async () => {
+    if (isDemo) return;
+    try {
+      const res = await fetch("/api/auth/google/status");
+      if (res.ok) {
+        const data = await res.json();
+        setGoogleAccount(data);
+      }
+    } catch {
+      // ignore
+    }
+  }, [isDemo]);
+
+  useEffect(() => {
+    if (isOpen) {
+      checkGoogleStatus();
+    }
+  }, [isOpen, checkGoogleStatus]);
+
   if (!isOpen) return null;
+
+  const handleConnectGmail = () => {
+    window.location.href = "/api/auth/google/connect";
+  };
+
+  const handleSyncGmailLive = async () => {
+    setIsGmailSyncing(true);
+    setResultMessage(null);
+    try {
+      const res = await fetch("/api/sync/gmail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ daysBack: 14 }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setResultMessage({
+          type: "error",
+          text: data.error || "Gmail synchronization failed",
+          details: data.instruction,
+        });
+      } else {
+        setResultMessage({
+          type: "success",
+          text: data.message || "Gmail sync completed!",
+          details: `Scanned ${data.scannedCount || 0} order emails.`,
+        });
+        if (onShipmentDiscovered) {
+          onShipmentDiscovered();
+        }
+        checkGoogleStatus();
+      }
+    } catch (err) {
+      setResultMessage({
+        type: "error",
+        text: (err as Error).message || "Failed to sync Gmail",
+      });
+    } finally {
+      setIsGmailSyncing(false);
+    }
+  };
+
+  const handleDisconnectGmail = async () => {
+    if (!confirm("Are you sure you want to disconnect Gmail and revoke tokens?")) return;
+    try {
+      await fetch("/api/auth/google/disconnect", { method: "POST" });
+      setGoogleAccount({ connected: false });
+      setResultMessage({
+        type: "success",
+        text: "Gmail account disconnected successfully.",
+      });
+    } catch {
+      // ignore
+    }
+  };
 
   const handleQuickPreset = (preset: "amazon" | "myntra" | "flipkart") => {
     if (preset === "amazon") {
@@ -216,6 +301,72 @@ export function EmailSyncModal({
               <p className="text-[11px] text-emerald-800 leading-relaxed">
                 WhereBox only extracts package metadata (product name, tracking number). Raw email bodies are processed in-memory and immediately destroyed. We never read or store personal communications.
               </p>
+            </div>
+          </div>
+
+          {/* Google Account Live Integration Card */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-50 to-indigo-50/40 border border-slate-200/90 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center justify-center shrink-0">
+                  <Mail className="w-5 h-5 text-red-500" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                    <span>Google Workspace & Gmail</span>
+                    {googleAccount.connected ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Connected
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-slate-400">
+                        Not Connected
+                      </span>
+                    )}
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {googleAccount.connected
+                      ? `Syncing orders from ${googleAccount.email} (Last synced: ${googleAccount.lastSyncedAt ? new Date(googleAccount.lastSyncedAt).toLocaleTimeString() : "Just now"})`
+                      : "Connect your Gmail to automatically detect packages from Amazon, Myntra & Flipkart."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {googleAccount.connected ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      isLoading={isGmailSyncing}
+                      onClick={handleSyncGmailLive}
+                    >
+                      <RotateCw className="w-3.5 h-3.5" />
+                      <span>Sync Now</span>
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={handleDisconnectGmail}
+                      className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg transition-colors"
+                      title="Disconnect Gmail"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={handleConnectGmail}
+                  >
+                    <span>Connect Gmail</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
 
