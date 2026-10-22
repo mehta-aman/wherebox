@@ -9,21 +9,29 @@ import {
   ArrowRight, 
   CheckCircle2, 
   AlertCircle, 
-  Package, 
-  Building2, 
   ShieldCheck 
 } from "lucide-react";
+import { parseOrderEmail } from "@/lib/email/parser";
 
 interface EmailSyncModalProps {
   isOpen: boolean;
   onClose: () => void;
   onShipmentDiscovered?: () => void;
+  onAddDemoShipment?: (payload: {
+    trackingNumber: string;
+    storeName: string;
+    itemLabel: string;
+    carrierCode?: string;
+  }) => void;
+  isDemo?: boolean;
 }
 
 export function EmailSyncModal({
   isOpen,
   onClose,
   onShipmentDiscovered,
+  onAddDemoShipment,
+  isDemo,
 }: EmailSyncModalProps) {
   const [emailText, setEmailText] = useState("");
   const [senderEmail, setSenderEmail] = useState("auto-confirm@amazon.in");
@@ -67,6 +75,32 @@ export function EmailSyncModal({
     setResultMessage(null);
 
     try {
+      if (isDemo) {
+        const clientParsed = parseOrderEmail({
+          from: senderEmail,
+          subject,
+          bodyText: emailText,
+        });
+
+        if (clientParsed && clientParsed.trackingNumber) {
+          if (onAddDemoShipment) {
+            onAddDemoShipment({
+              trackingNumber: clientParsed.trackingNumber,
+              storeName: clientParsed.storeName,
+              itemLabel: clientParsed.itemTitle || "Discovered Order Item",
+              carrierCode: clientParsed.carrierCode,
+            });
+          }
+          setResultMessage({
+            type: "success",
+            text: `Discovered "${clientParsed.itemTitle}" from ${clientParsed.storeName}!`,
+            details: `Waybill #${clientParsed.trackingNumber} added to demo dashboard.`,
+          });
+          setIsLoading(false);
+          return;
+        }
+      }
+
       const res = await fetch("/api/sync/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -80,6 +114,33 @@ export function EmailSyncModal({
       const data = await res.json();
 
       if (!res.ok) {
+        if (res.status === 401) {
+          // Graceful fallback for unauthenticated preview mode
+          const clientParsed = parseOrderEmail({
+            from: senderEmail,
+            subject,
+            bodyText: emailText,
+          });
+
+          if (clientParsed && clientParsed.trackingNumber) {
+            if (onAddDemoShipment) {
+              onAddDemoShipment({
+                trackingNumber: clientParsed.trackingNumber,
+                storeName: clientParsed.storeName,
+                itemLabel: clientParsed.itemTitle || "Discovered Order Item",
+                carrierCode: clientParsed.carrierCode,
+              });
+            }
+            setResultMessage({
+              type: "success",
+              text: `Discovered "${clientParsed.itemTitle}" from ${clientParsed.storeName}!`,
+              details: `Added in preview mode. Sign in to sync permanently to your private database vault.`,
+            });
+            setIsLoading(false);
+            return;
+          }
+        }
+
         setResultMessage({
           type: "error",
           text: data.error || "Failed to parse email",

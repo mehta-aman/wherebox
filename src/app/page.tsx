@@ -680,6 +680,14 @@ function DashboardContent() {
       <EmailSyncModal
         isOpen={isEmailSyncOpen}
         onClose={() => setIsEmailSyncOpen(false)}
+        isDemo={isDemo || !currentUser}
+        onAddDemoShipment={(payload) => {
+          handleAddShipment({
+            trackingNumber: payload.trackingNumber,
+            storeName: payload.storeName,
+            itemLabel: payload.itemLabel,
+          });
+        }}
         onShipmentDiscovered={() => {
           loadData();
         }}

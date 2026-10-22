@@ -95,8 +95,8 @@ function parseAmazonEmail(msg: EmailMessagePayload, text: string): ParsedEmailSh
   // Tracking Number / AWB
   // Amazon uses TBA... for Amazon Logistics, or numbers for Delhivery/Blue Dart
   let trackingNumber: string | undefined;
-  let carrierCode = "amazon_in";
-  let carrierName = "Amazon Shipping";
+  const carrierCode = "amazon_in";
+  const carrierName = "Amazon Shipping";
 
   const tbaMatch = text.match(/\b(TBA\w{10,18})\b/i);
   if (tbaMatch) {
@@ -159,8 +159,8 @@ function parseFlipkartEmail(msg: EmailMessagePayload, text: string): ParsedEmail
 
   // Ekart tracking number or courier
   let trackingNumber: string | undefined;
-  let carrierCode = "ekart";
-  let carrierName = "Ekart Logistics";
+  const carrierCode = "ekart";
+  const carrierName = "Ekart Logistics";
 
   const ekartMatch = text.match(/\b(FMPC\w{8,14}|EKART\w{6,14})\b/i);
   if (ekartMatch) {
