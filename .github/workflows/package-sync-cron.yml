@@ -1,0 +1,23 @@
+name: Automated Package Tracking Refresh Cron
+
+on:
+  schedule:
+    # Runs every 3 hours (₹0 cost on GitHub Actions)
+    - cron: "0 */3 * * *"
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  refresh-packages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping WhereBox Background Refresh Endpoint
+        run: |
+          if [ -n "${{ secrets.WHEREBOX_PRODUCTION_URL }}" ]; then
+            TARGET_URL="${{ secrets.WHEREBOX_PRODUCTION_URL }}"
+          else
+            TARGET_URL="https://wherebox.vercel.app"
+          fi
+          
+          echo "Pinging $TARGET_URL/api/cron/refresh-active..."
+          curl -s -f -X GET "$TARGET_URL/api/cron/refresh-active" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" || echo "Endpoint pinged"
