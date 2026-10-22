@@ -13,19 +13,15 @@ export async function GET() {
       data: { user },
     } = await supabase.auth.getUser();
 
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+
     if (!user) {
-      return NextResponse.redirect(new URL("/login?redirect=/api/auth/google/connect", process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"));
+      return NextResponse.redirect(new URL("/login?redirect=/api/auth/google/connect", appUrl));
     }
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
     if (!clientId) {
-      return NextResponse.json(
-        {
-          error: "Google OAuth credentials not configured.",
-          instruction: "Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.local to enable live Gmail sync.",
-        },
-        { status: 503 }
-      );
+      return NextResponse.redirect(`${appUrl}/?google_setup=needed`);
     }
 
     // State payload encodes user ID to prevent CSRF

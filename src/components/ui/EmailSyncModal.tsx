@@ -12,7 +12,10 @@ import {
   ShieldCheck,
   RotateCw,
   LogOut,
-  ExternalLink
+  ExternalLink,
+  Key,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { parseOrderEmail } from "@/lib/email/parser";
 
@@ -43,9 +46,14 @@ export function EmailSyncModal({
   const [isGmailSyncing, setIsGmailSyncing] = useState(false);
   const [googleAccount, setGoogleAccount] = useState<{
     connected: boolean;
+    configured?: boolean;
     email?: string;
     lastSyncedAt?: string;
-  }>({ connected: false });
+  }>({ connected: false, configured: false });
+  const [showCredsForm, setShowCredsForm] = useState(false);
+  const [inputClientId, setInputClientId] = useState("");
+  const [inputClientSecret, setInputClientSecret] = useState("");
+  const [isSavingCreds, setIsSavingCreds] = useState(false);
   const [resultMessage, setResultMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -75,7 +83,70 @@ export function EmailSyncModal({
   if (!isOpen) return null;
 
   const handleConnectGmail = () => {
+    if (!googleAccount.configured) {
+      setShowCredsForm((prev) => !prev);
+      return;
+    }
     window.location.href = "/api/auth/google/connect";
+  };
+
+  const handleSaveCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputClientId.trim() || !inputClientSecret.trim()) return;
+
+    setIsSavingCreds(true);
+    setResultMessage(null);
+
+    try {
+      const res = await fetch("/api/settings/google-credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: inputClientId.trim(),
+          clientSecret: inputClientSecret.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setResultMessage({
+          type: "error",
+          text: data.error || "Failed to save Google credentials",
+        });
+      } else {
+        setResultMessage({
+          type: "success",
+          text: "Google OAuth credentials configured! Redirecting to Google authorization...",
+        });
+        setGoogleAccount((prev) => ({ ...prev, configured: true }));
+        setShowCredsForm(false);
+        setTimeout(() => {
+          window.location.href = "/api/auth/google/connect";
+        }, 1000);
+      }
+    } catch (err) {
+      setResultMessage({
+        type: "error",
+        text: (err as Error).message || "Failed to save credentials",
+      });
+    } finally {
+      setIsSavingCreds(false);
+    }
+  };
+
+  const handleSimulateConnected = () => {
+    setGoogleAccount({
+      connected: true,
+      configured: true,
+      email: "amanmehta519@gmail.com",
+      lastSyncedAt: new Date().toISOString(),
+    });
+    setShowCredsForm(false);
+    setResultMessage({
+      type: "success",
+      text: "Simulated Gmail connected as amanmehta519@gmail.com!",
+      details: "You can now test syncing or use the sample presets below.",
+    });
   };
 
   const handleSyncGmailLive = async () => {
@@ -362,12 +433,102 @@ export function EmailSyncModal({
                     size="sm"
                     onClick={handleConnectGmail}
                   >
-                    <span>Connect Gmail</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>{googleAccount.configured ? "Connect Gmail" : "Setup Google OAuth"}</span>
+                    {googleAccount.configured ? (
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    ) : showCredsForm ? (
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    )}
                   </Button>
                 )}
               </div>
             </div>
+
+            {/* Google OAuth Credentials Configuration Accordion */}
+            {showCredsForm && !googleAccount.connected && (
+              <form onSubmit={handleSaveCredentials} className="mt-4 pt-4 border-t border-slate-200/80 space-y-3 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5 text-indigo-600" />
+                    Google Cloud Credentials Setup
+                  </span>
+                  <a
+                    href="https://console.cloud.google.com/apis/credentials"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-indigo-600 hover:underline flex items-center gap-1 font-semibold"
+                  >
+                    <span>Get Free Keys on Google Cloud</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  In Google Cloud Console, create an <strong>OAuth 2.0 Client ID</strong> (Web App). Add authorized redirect URI:{" "}
+                  <code className="bg-white px-1.5 py-0.5 rounded border border-slate-200 font-mono text-[10px]">
+                    http://localhost:3000/api/auth/google/callback
+                  </code>
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
+                      Google Client ID
+                    </label>
+                    <input
+                      type="text"
+                      value={inputClientId}
+                      onChange={(e) => setInputClientId(e.target.value)}
+                      placeholder="123456789-xxx.apps.googleusercontent.com"
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
+                      Google Client Secret
+                    </label>
+                    <input
+                      type="password"
+                      value={inputClientSecret}
+                      onChange={(e) => setInputClientSecret(e.target.value)}
+                      placeholder="GOCSPX-xxxxxxxxx"
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleSimulateConnected}
+                    className="text-[11px] font-semibold text-purple-700 hover:text-purple-900 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-200 transition-colors"
+                  >
+                    Simulate Connect (No Cloud Keys Required)
+                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowCredsForm(false)}
+                      className="px-2.5 py-1 text-xs text-slate-500 hover:text-slate-700"
+                    >
+                      Cancel
+                    </button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="sm"
+                      isLoading={isSavingCreds}
+                    >
+                      <span>Save & Connect</span>
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            )}
           </div>
 
           {/* Preset Buttons for Quick Demo Testing */}
